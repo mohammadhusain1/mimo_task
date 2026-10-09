@@ -1,0 +1,213 @@
+// Prisma Schema for Smart Print Order & Job Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CUSTOMER
+  KIOSK_OPERATOR
+}
+
+enum KioskStatus {
+  ACTIVE
+  MAINTENANCE
+  OFFLINE
+}
+
+enum PaperSize {
+  A4
+  A3
+  A5
+}
+
+enum ColorMode {
+  BW
+  COLOR
+}
+
+enum OrderStatus {
+  CREATED
+  PAYMENT_PENDING
+  PAID
+  PRINTING
+  COMPLETED
+  PAYMENT_FAILED
+  PRINT_FAILED
+  CANCELLED
+}
+
+enum PrintJobStatus {
+  QUEUED
+  PRINTING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum AuditEventType {
+  ORDER_CREATED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  PRINT_STARTED
+  PRINT_COMPLETED
+  PRINT_FAILED
+  ORDER_CANCELLED
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         Role        @default(CUSTOMER)
+  customer     Customer?
+  kiosks       Kiosk[]     @relation("KioskOperator")
+  auditLogs    AuditLog[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("users")
+}
+
+model Customer {
+  id        String   @id // e.g., CUS001 or UUID
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  email     String
+  phone     String?
+  isActive  Boolean  @default(true)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customers")
+}
+
+model Kiosk {
+  id         String      @id // e.g., KIOSK001 or UUID
+  name       String
+  location   String
+  status     KioskStatus @default(ACTIVE)
+  operatorId String?
+  operator   User?       @relation("KioskOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  orders     Order[]
+  printJobs  PrintJob[]
+  auditLogs  AuditLog[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("kiosks")
+}
+
+model Order {
+  id               String       @id // e.g., ORD-20261009-ABC123
+  customerId       String
+  customer         Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  kioskId          String
+  kiosk            Kiosk        @relation(fields: [kioskId], references: [id], onDelete: Restrict)
+  fileUrl          String
+  pageCount        Int
+  copies           Int
+  paperSize        PaperSize
+  colorMode        ColorMode
+  basePricePerPage Int          // In minor units (cents)
+  totalPrice       Int          // In minor units (cents)
+  currency         String       @default("USD")
+  status           OrderStatus  @default(CREATED)
+  version          Int          @default(1) // Optimistic concurrency control
+  printJob         PrintJob?
+  payments         Payment[]
+  auditLogs        AuditLog[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([customerId])
+  @@index([kioskId])
+  @@index([status])
+  @@map("orders")
+}
+
+model PrintJob {
+  id           String         @id // e.g., JOB-20261009-XYZ789
+  orderId      String         @unique
+  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kioskId      String
+  kiosk        Kiosk          @relation(fields: [kioskId], references: [id], onDelete: Restrict)
+  status       PrintJobStatus @default(QUEUED)
+  attempts     Int            @default(0)
+  errorMessage String?
+  createdAt    DateTime       @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  @@index([kioskId])
+  @@index([status])
+  @@map("print_jobs")
+}
+
+model Payment {
+  id             String        @id // e.g., PAY-20261009-QWE456
+  orderId        String
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  amount         Int           // In minor units (cents)
+  currency       String        @default("USD")
+  status         PaymentStatus @default(PENDING)
+  transactionRef String        @unique
+  idempotencyKey String?       @unique
+  provider       String        @default("SIMULATED")
+  errorMessage   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@map("payments")
+}
+
+model AuditLog {
+  id             String         @id @default(uuid())
+  event          AuditEventType
+  orderId        String?
+  order          Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  kioskId        String?
+  kiosk          Kiosk?         @relation(fields: [kioskId], references: [id], onDelete: SetNull)
+  userId         String?
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  previousStatus String?
+  newStatus      String?
+  metadata       Json           @default("{}")
+  timestamp      DateTime       @default(now())
+
+  @@index([orderId])
+  @@index([kioskId])
+  @@index([userId])
+  @@index([event])
+  @@map("audit_logs")
+}
+
+model PricingRule {
+  id           String    @id @default(uuid())
+  paperSize    PaperSize
+  colorMode    ColorMode
+  pricePerPage Int       // In minor units (cents), e.g. 10 = $0.10
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([paperSize, colorMode])
+  @@map("pricing_rules")
+}

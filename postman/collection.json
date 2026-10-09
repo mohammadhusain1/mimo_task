@@ -1,0 +1,199 @@
+{
+  "info": {
+    "name": "Smart Print Order & Job Management System",
+    "description": "Comprehensive Postman collection for the Smart Print API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "authToken", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "paymentId", "value": "" },
+    { "key": "jobId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login Customer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer1@example.com\",\n  \"password\": \"Customer@123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@smartprint.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
+            "url": "{{baseUrl}}/api/auth/profile"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order (A4 BW)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS001\",\n  \"kioskId\": \"KIOSK001\",\n  \"fileUrl\": \"https://example.com/document.pdf\",\n  \"copies\": 3,\n  \"paperSize\": \"A4\",\n  \"colorMode\": \"BW\"\n}"
+            },
+            "url": "{{baseUrl}}/api/orders"
+          }
+        },
+        {
+          "name": "Get Order By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/orders/{{orderId}}"
+          }
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/orders?page=1&limit=10"
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Changed mind before printing\"\n}"
+            },
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/cancel"
+          }
+        },
+        {
+          "name": "Get Order Audit Logs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/audit-logs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Initiate Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "IDEMP-TEST-001" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"SIMULATED\"\n}"
+            },
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/payment"
+          }
+        },
+        {
+          "name": "Payment Success Simulation",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/payments/{{paymentId}}/success"
+          }
+        },
+        {
+          "name": "Payment Failure Simulation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Insufficient card balance\"\n}"
+            },
+            "url": "{{baseUrl}}/api/payments/{{paymentId}}/failure"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Print Jobs",
+      "item": [
+        {
+          "name": "List Print Jobs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/print-jobs"
+          }
+        },
+        {
+          "name": "Start Print Job",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/print-jobs/{{jobId}}/start"
+          }
+        },
+        {
+          "name": "Complete Print Job",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/print-jobs/{{jobId}}/complete"
+          }
+        },
+        {
+          "name": "Fail Print Job",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"errorMessage\": \"Printer paper tray ran out\"\n}"
+            },
+            "url": "{{baseUrl}}/api/print-jobs/{{jobId}}/fail"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Kiosks & Pricing",
+      "item": [
+        {
+          "name": "List Kiosks",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/kiosks"
+          }
+        },
+        {
+          "name": "List Pricing Rules",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/pricing"
+          }
+        }
+      ]
+    }
+  ]
+}
