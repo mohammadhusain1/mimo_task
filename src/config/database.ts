@@ -21,7 +21,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 export async function checkDatabaseConnection(): Promise<boolean> {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await prisma.user.count();
     Logger.info('Database connection verified successfully');
     return true;
   } catch (error) {
