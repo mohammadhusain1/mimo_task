@@ -9,29 +9,67 @@ import {
   getOrdersQuerySchema,
 } from './order.schema';
 import { initiatePaymentSchema } from '../payments/payment.schema';
-import { authenticate, optionalAuthenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireRole } from '../../middleware/auth.middleware';
+import { Role } from '@prisma/client';
 
 const router = Router();
 
-// Order creation - supports optional token (validates customer if provided) or direct creation
-router.post('/', optionalAuthenticate, validate(createOrderSchema), OrderController.createOrder);
+// Order creation - requires authentication, accessible by CUSTOMER and ADMIN
+router.post(
+  '/',
+  authenticate,
+  requireRole(Role.CUSTOMER, Role.ADMIN),
+  validate(createOrderSchema),
+  OrderController.createOrder
+);
 
-// Order listing with filters & pagination
-router.get('/', optionalAuthenticate, validate(getOrdersQuerySchema), OrderController.listOrders);
+// Order listing with filters & pagination - requires authentication, scoped by role
+router.get(
+  '/',
+  authenticate,
+  validate(getOrdersQuerySchema),
+  OrderController.listOrders
+);
 
-// Order details by ID
-router.get('/:orderId', optionalAuthenticate, OrderController.getOrderById);
+// Order details by ID - requires authentication, authorized by role/ownership
+router.get(
+  '/:orderId',
+  authenticate,
+  OrderController.getOrderById
+);
 
-// Initiate payment for order: POST /api/orders/:orderId/payment
-router.post('/:orderId/payment', optionalAuthenticate, validate(initiatePaymentSchema), PaymentController.initiatePayment);
+// Initiate payment for order: POST /api/orders/:orderId/payment - requires authentication
+router.post(
+  '/:orderId/payment',
+  authenticate,
+  requireRole(Role.CUSTOMER, Role.ADMIN),
+  validate(initiatePaymentSchema),
+  PaymentController.initiatePayment
+);
 
-// State transition
-router.patch('/:orderId/status', optionalAuthenticate, validate(updateOrderStatusSchema), OrderController.transitionStatus);
+// State transition - strictly restricted to ADMIN
+router.patch(
+  '/:orderId/status',
+  authenticate,
+  requireRole(Role.ADMIN),
+  validate(updateOrderStatusSchema),
+  OrderController.transitionStatus
+);
 
-// Cancel order
-router.post('/:orderId/cancel', optionalAuthenticate, validate(cancelOrderSchema), OrderController.cancelOrder);
+// Cancel order - requires authentication, CUSTOMER or ADMIN
+router.post(
+  '/:orderId/cancel',
+  authenticate,
+  requireRole(Role.CUSTOMER, Role.ADMIN),
+  validate(cancelOrderSchema),
+  OrderController.cancelOrder
+);
 
-// Audit logs for an order
-router.get('/:orderId/audit-logs', optionalAuthenticate, OrderController.getOrderAuditLogs);
+// Audit logs for an order - requires authentication, scoped to authorized parties
+router.get(
+  '/:orderId/audit-logs',
+  authenticate,
+  OrderController.getOrderAuditLogs
+);
 
 export default router;

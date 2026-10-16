@@ -6,6 +6,7 @@ export const generalLimiter = rateLimit({
   max: env.RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
   message: {
     success: false,
     error: {
@@ -20,6 +21,7 @@ export const authLimiter = rateLimit({
   max: 20, // 20 attempts
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
   message: {
     success: false,
     error: {

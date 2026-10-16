@@ -1,6 +1,36 @@
+# Dependencies
 node_modules/
+
+# Production build outputs
 dist/
+build/
+
+# Test coverage
 coverage/
+*.lcov
+
+# Environment files and credentials
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+
+# Local PostgreSQL binary data (pglite / embedded postgres)
+prisma/pgdata/
+pgdata/
+*.pid
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS and Editor files
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -25,6 +25,11 @@ Robust, multi-kiosk enterprise printing backend with state machine lifecycle, si
       description: 'Local Development Server',
     },
   ],
+  security: [
+    {
+      bearerAuth: [],
+    },
+  ],
   components: {
     securitySchemes: {
       bearerAuth: {

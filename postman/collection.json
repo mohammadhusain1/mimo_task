@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Smart Print Order & Job Management System",
-    "description": "Comprehensive Postman collection for the Smart Print API",
+    "description": "Comprehensive Postman collection for the Smart Print API with mandatory authentication and RBAC",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -23,6 +23,18 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"customer1@example.com\",\n  \"password\": \"Customer@123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login Operator",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"operator1@smartprint.com\",\n  \"password\": \"Operator@123\"\n}"
             },
             "url": "{{baseUrl}}/api/auth/login"
           }
@@ -56,7 +68,10 @@
           "name": "Create Order (A4 BW)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"customerId\": \"CUS001\",\n  \"kioskId\": \"KIOSK001\",\n  \"fileUrl\": \"https://example.com/document.pdf\",\n  \"copies\": 3,\n  \"paperSize\": \"A4\",\n  \"colorMode\": \"BW\"\n}"
@@ -68,6 +83,7 @@
           "name": "Get Order By ID",
           "request": {
             "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
             "url": "{{baseUrl}}/api/orders/{{orderId}}"
           }
         },
@@ -75,6 +91,7 @@
           "name": "List Orders",
           "request": {
             "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
             "url": "{{baseUrl}}/api/orders?page=1&limit=10"
           }
         },
@@ -82,7 +99,10 @@
           "name": "Cancel Order",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reason\": \"Changed mind before printing\"\n}"
@@ -94,6 +114,7 @@
           "name": "Get Order Audit Logs",
           "request": {
             "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
             "url": "{{baseUrl}}/api/orders/{{orderId}}/audit-logs"
           }
         }
@@ -108,6 +129,7 @@
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
               { "key": "Idempotency-Key", "value": "IDEMP-TEST-001" }
             ],
             "body": {
@@ -121,6 +143,14 @@
           "name": "Payment Success Simulation",
           "request": {
             "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionRef\": \"TXN-SIM-001\"\n}"
+            },
             "url": "{{baseUrl}}/api/payments/{{paymentId}}/success"
           }
         },
@@ -128,7 +158,10 @@
           "name": "Payment Failure Simulation",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reason\": \"Insufficient card balance\"\n}"
@@ -145,6 +178,7 @@
           "name": "List Print Jobs",
           "request": {
             "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
             "url": "{{baseUrl}}/api/print-jobs"
           }
         },
@@ -152,6 +186,7 @@
           "name": "Start Print Job",
           "request": {
             "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
             "url": "{{baseUrl}}/api/print-jobs/{{jobId}}/start"
           }
         },
@@ -159,6 +194,7 @@
           "name": "Complete Print Job",
           "request": {
             "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
             "url": "{{baseUrl}}/api/print-jobs/{{jobId}}/complete"
           }
         },
@@ -166,7 +202,10 @@
           "name": "Fail Print Job",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"errorMessage\": \"Printer paper tray ran out\"\n}"
@@ -191,6 +230,19 @@
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/api/pricing"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit Logs",
+      "item": [
+        {
+          "name": "Get System Audit Logs (Admin Only)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
+            "url": "{{baseUrl}}/api/audit-logs?page=1&limit=20"
           }
         }
       ]

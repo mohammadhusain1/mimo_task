@@ -1,6 +1,6 @@
 import { PaperSize, ColorMode, OrderStatus, PrintJobStatus, AuditEventType, KioskStatus } from '@prisma/client';
 import { prisma } from '../../config/database';
-import { BadRequestError, NotFoundError, ForbiddenError } from '../../utils/errors';
+import { BadRequestError, NotFoundError, ForbiddenError, UnauthorizedError } from '../../utils/errors';
 import { PricingService } from '../../services/pricing.service';
 import { FilePageCounterService } from '../../services/file-page-counter.service';
 import { OrderStateMachineService } from '../../services/state-machine.service';
@@ -29,9 +29,22 @@ export class OrderService {
    * Create order with automatic print job creation and transactional audit log
    */
   static async createOrder(dto: CreateOrderDto, currentUser?: AuthUser) {
+    if (!currentUser) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
     const { customerId, kioskId, fileUrl, copies, paperSize, colorMode } = dto;
 
-    // 1. Validate customer exists and is eligible
+    // 1. Role permission checks:
+    if (currentUser.role === 'KIOSK_OPERATOR') {
+      throw new ForbiddenError('Kiosk operators cannot place customer orders');
+    }
+
+    if (currentUser.role === 'CUSTOMER' && currentUser.customerId !== customerId) {
+      throw new ForbiddenError('Customers can only create orders for their own account');
+    }
+
+    // 2. Validate customer exists and is eligible
     const customer = await prisma.customer.findUnique({
       where: { id: customerId },
     });
@@ -44,12 +57,7 @@ export class OrderService {
       throw new BadRequestError(`Customer account '${customerId}' is inactive and cannot place orders`);
     }
 
-    // Customer role permission check: customers can only place orders for themselves
-    if (currentUser && currentUser.role === 'CUSTOMER' && currentUser.customerId !== customerId) {
-      throw new ForbiddenError('Customers can only create orders for their own account');
-    }
-
-    // 2. Validate kiosk exists and is eligible
+    // 3. Validate kiosk exists and is eligible
     const kiosk = await prisma.kiosk.findUnique({
       where: { id: kioskId },
     });
@@ -64,11 +72,11 @@ export class OrderService {
       );
     }
 
-    // 3. Inspect document page count (with SSRF protection & mock provider)
+    // 4. Inspect document page count (with SSRF protection & mock provider)
     const pageResult = await FilePageCounterService.getPageCount(fileUrl);
     const pageCount = pageResult.pageCount;
 
-    // 4. Calculate authoritative price server-side
+    // 5. Calculate authoritative price server-side
     const priceCalculation = await PricingService.calculatePrice({
       paperSize,
       colorMode,
@@ -79,7 +87,7 @@ export class OrderService {
     const orderId = this.generateUniqueId('ORD');
     const printJobId = this.generateUniqueId('JOB');
 
-    // 5. Atomic transaction for Order, PrintJob, and AuditLog
+    // 6. Atomic transaction for Order, PrintJob, and AuditLog
     const result = await prisma.$transaction(async (tx) => {
       // Create Order
       const newOrder = await tx.order.create({
@@ -116,7 +124,7 @@ export class OrderService {
           event: AuditEventType.ORDER_CREATED,
           orderId: newOrder.id,
           kioskId,
-          userId: currentUser?.id || null,
+          userId: currentUser.id,
           previousStatus: null,
           newStatus: OrderStatus.CREATED,
           metadata: {
@@ -172,6 +180,10 @@ export class OrderService {
    * Retrieve order with full associations and access control
    */
   static async getOrderById(orderId: string, currentUser?: AuthUser) {
+    if (!currentUser) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -187,17 +199,15 @@ export class OrderService {
     }
 
     // Role-based access control
-    if (currentUser) {
-      if (currentUser.role === 'CUSTOMER' && order.customerId !== currentUser.customerId) {
-        throw new ForbiddenError('You do not have permission to access another customer\'s order');
-      }
+    if (currentUser.role === 'CUSTOMER' && order.customerId !== currentUser.customerId) {
+      throw new ForbiddenError('You do not have permission to access another customer\'s order');
+    }
 
-      if (
-        currentUser.role === 'KIOSK_OPERATOR' &&
-        !currentUser.assignedKioskIds.includes(order.kioskId)
-      ) {
-        throw new ForbiddenError('You are not authorized to access orders for this kiosk');
-      }
+    if (
+      currentUser.role === 'KIOSK_OPERATOR' &&
+      !currentUser.assignedKioskIds.includes(order.kioskId)
+    ) {
+      throw new ForbiddenError('You are not authorized to access orders for this kiosk');
     }
 
     return order;
@@ -216,6 +226,10 @@ export class OrderService {
     },
     currentUser?: AuthUser
   ) {
+    if (!currentUser) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
     const page = query.page || 1;
     const limit = query.limit || 10;
     const skip = (page - 1) * limit;
@@ -223,19 +237,17 @@ export class OrderService {
     const where: any = {};
 
     // Apply role-based filtering
-    if (currentUser) {
-      if (currentUser.role === 'CUSTOMER') {
-        where.customerId = currentUser.customerId;
-      } else if (currentUser.role === 'KIOSK_OPERATOR') {
-        where.kioskId = { in: currentUser.assignedKioskIds };
-      }
+    if (currentUser.role === 'CUSTOMER') {
+      where.customerId = currentUser.customerId;
+    } else if (currentUser.role === 'KIOSK_OPERATOR') {
+      where.kioskId = { in: currentUser.assignedKioskIds };
     }
 
-    if (query.customerId && (!currentUser || currentUser.role === 'ADMIN')) {
+    if (query.customerId && currentUser.role === 'ADMIN') {
       where.customerId = query.customerId;
     }
 
-    if (query.kioskId && (!currentUser || currentUser.role === 'ADMIN')) {
+    if (query.kioskId && currentUser.role === 'ADMIN') {
       where.kioskId = query.kioskId;
     }
 
@@ -270,7 +282,7 @@ export class OrderService {
   }
 
   /**
-   * Request validated status transition
+   * Request validated status transition (Admin only manual transition)
    */
   static async transitionStatus(
     orderId: string,
@@ -279,12 +291,20 @@ export class OrderService {
     expectedVersion?: number,
     currentUser?: AuthUser
   ) {
+    if (!currentUser) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
+    if (currentUser.role !== 'ADMIN') {
+      throw new ForbiddenError('Only administrators can manually update order status');
+    }
+
     const order = await this.getOrderById(orderId, currentUser);
 
     return await OrderStateMachineService.transition({
       orderId: order.id,
       targetStatus,
-      userId: currentUser?.id,
+      userId: currentUser.id,
       kioskId: order.kioskId,
       reason,
       expectedVersion,
@@ -295,14 +315,23 @@ export class OrderService {
    * Cancel an eligible order
    */
   static async cancelOrder(orderId: string, reason?: string, currentUser?: AuthUser) {
+    if (!currentUser) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
+    if (currentUser.role === 'KIOSK_OPERATOR') {
+      throw new ForbiddenError('Kiosk operators cannot cancel customer orders');
+    }
+
     const order = await this.getOrderById(orderId, currentUser);
 
     return await OrderStateMachineService.transition({
       orderId: order.id,
       targetStatus: OrderStatus.CANCELLED,
-      userId: currentUser?.id,
+      userId: currentUser.id,
       kioskId: order.kioskId,
       reason: reason || 'Order cancelled by user',
+      expectedVersion: order.version,
     });
   }
 
@@ -310,6 +339,10 @@ export class OrderService {
    * Retrieve audit logs for an order
    */
   static async getOrderAuditLogs(orderId: string, currentUser?: AuthUser) {
+    if (!currentUser) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
     // Check permission to view order
     await this.getOrderById(orderId, currentUser);
 

@@ -79,10 +79,10 @@ export class OrderStateMachineService {
   /**
    * Transition order to target status inside a database transaction with concurrency locking
    */
-  static async transition(context: TransitionContext) {
+  static async transition(context: TransitionContext, txClient?: any) {
     const { orderId, targetStatus, userId, kioskId, reason, metadata = {}, expectedVersion } = context;
 
-    return await prisma.$transaction(async (tx) => {
+    const execute = async (tx: any) => {
       // 1. Fetch current order with print job and locking
       const order = await tx.order.findUnique({
         where: { id: orderId },
@@ -190,6 +190,11 @@ export class OrderStateMachineService {
       });
 
       return updatedOrder;
-    });
+    };
+
+    if (txClient) {
+      return await execute(txClient);
+    }
+    return await prisma.$transaction(execute);
   }
 }
